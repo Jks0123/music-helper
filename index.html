@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>扒譜助手</title>
+  <style>
+    body{
+      font-family: system-ui, -apple-system, "Segoe UI", Arial;
+      margin: 14px;
+      background: #fafafa;
+      color: #111;
+    }
+    h1{ font-size: 20px; margin: 0 0 10px; }
+    .row{
+      display:flex;
+      gap:10px;
+      margin:10px 0;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    button{
+      font-size:18px;
+      padding:12px 14px;
+      border-radius:12px;
+      border:1px solid #ccc;
+      background:#fff;
+      cursor:pointer;
+      user-select:none;
+    }
+    button:active{ background:#eee; }
+    .mode{ font-weight:800; font-size:16px; }
+    textarea{
+      width:100%;
+      height:60vh;
+      font-size:18px;
+      padding:12px;
+      border-radius:12px;
+      border:1px solid #ccc;
+      resize:vertical;
+      box-sizing:border-box;
+      background:#fff;
+    }
+    .wide{ flex:1; }
+
+    /* 1–7：三行顯示（上點/數字/下點） */
+    .numBtn{
+      display:grid;
+      grid-template-rows: 14px 24px 14px; /* 上點 / 數字 / 下點 */
+      align-items:center;
+      justify-items:center;
+      min-width:56px;
+      padding:10px 10px;
+    }
+    .dot{
+      line-height:1;
+      height:14px;
+      font-size:18px;
+    }
+    .digit{
+      line-height:1;
+      font-size:20px;
+      font-weight:900;
+    }
+
+    /* 小螢幕：按鈕更好按 */
+    @media (max-width: 420px){
+      button{ font-size:18px; padding:12px 12px; }
+      .numBtn{ min-width:52px; }
+      textarea{ height:55vh; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>扒譜助手</h1>
+
+<div class="row">
+  <div class="mode">鍵盤模式：<span id="modeName">中音</span></div>
+  <button id="toggleBtn" style="margin-left:auto;">切換（Tab）</button>
+</div>
+
+<!-- 符號列 -->
+<div class="row" id="symbolRow"></div>
+
+<!-- 1–7 -->
+<div class="row" id="numRow"></div>
+
+<!-- 輸出區 -->
+<textarea id="out" placeholder="輸出區（可直接輸入 / 編輯 / 複製 / 貼上）"></textarea>
+
+<!-- 功能 -->
+<div class="row">
+  <button class="wide" id="copyBtn">複製全部</button>
+  <button class="wide" id="downloadBtn">下載 TXT</button>
+</div>
+
+<script>
+  /* =============================
+     音域設定（順序：中音 -> 低音 -> 高音）
+     ============================= */
+  const layers = [
+    { name: "中音", map: [..."asdfghj"], dot: "none"  },
+    { name: "低音", map: [..."zxcvbnm"], dot: "below" },
+    { name: "高音", map: [..."qwertyu"], dot: "above" },
+  ];
+  let layerIdx = 0;
+
+  /* 固定符號列：-.~*,;<>| */
+  const symbols = ["-", ".", "~", "*", ",", ";", "<", ">", "|"];
+
+  const out = document.getElementById("out");
+  const modeName = document.getElementById("modeName");
+
+  function insertText(t){
+    const start = out.selectionStart;
+    const end   = out.selectionEnd;
+    const v = out.value;
+    out.value = v.slice(0, start) + t + v.slice(end);
+    const pos = start + t.length;
+    out.setSelectionRange(pos, pos);
+    out.focus();
+  }
+
+  function toggleLayer(){
+    layerIdx = (layerIdx + 1) % layers.length;
+    modeName.textContent = layers[layerIdx].name;
+    renderNumRow();
+  }
+
+  function renderSymbolRow(){
+    const row = document.getElementById("symbolRow");
+    row.innerHTML = "";
+    symbols.forEach(s=>{
+      const b = document.createElement("button");
+      b.textContent = s;
+      b.onclick = ()=> insertText(s);
+      row.appendChild(b);
+    });
+  }
+
+  function renderNumRow(){
+    const row = document.getElementById("numRow");
+    row.innerHTML = "";
+
+    const { map, dot } = layers[layerIdx];
+
+    for(let i=1;i<=7;i++){
+      const b = document.createElement("button");
+      b.className = "numBtn";
+
+      // 你要的：點在數字「上」或「下」
+      const top = document.createElement("div");
+      top.className = "dot";
+      top.textContent = (dot === "above") ? "•" : "";
+
+      const mid = document.createElement("div");
+      mid.className = "digit";
+      mid.textContent = String(i);
+
+      const bottom = document.createElement("div");
+      bottom.className = "dot";
+      bottom.textContent = (dot === "below") ? "•" : "";
+
+      b.appendChild(top);
+      b.appendChild(mid);
+      b.appendChild(bottom);
+
+      b.onclick = ()=> insertText(map[i-1]);
+      row.appendChild(b);
+    }
+  }
+
+  /* =============================
+     鍵盤事件：
+     - 1..7 -> 輸入對應字母（不輸入數字）
+     - Tab  -> 切換模式
+     ============================= */
+  document.addEventListener("keydown", (e)=>{
+    // 不要在輸入中文選字的時候干擾（可避免部分手機鍵盤問題）
+    if (e.isComposing) return;
+
+    if(e.key >= "1" && e.key <= "7"){
+      e.preventDefault();
+      const { map } = layers[layerIdx];
+      insertText(map[parseInt(e.key,10)-1]);
+    }else if(e.key === "Tab"){
+      e.preventDefault();
+      toggleLayer();
+    }
+  });
+
+  document.getElementById("toggleBtn").onclick = toggleLayer;
+
+  document.getElementById("copyBtn").onclick = async ()=>{
+    await navigator.clipboard.writeText(out.value);
+    alert("已複製");
+  };
+
+  document.getElementById("downloadBtn").onclick = ()=>{
+    const blob = new Blob([out.value], {type:"text/plain;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `output_${new Date().toISOString().replace(/[:.]/g,"-")}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  // init
+  renderSymbolRow();
+  renderNumRow();
+</script>
+
+</body>
+</html>

@@ -30,17 +30,27 @@
     }
     button:active{ background:#eee; }
     .mode{ font-weight:800; font-size:16px; }
-    textarea{
+
+    /* 輸出區：contenteditable */
+    .out{
       width:100%;
-      height:25vh;
+      height:25vh; /* 你目前設定：輸入區高度較小 */
       font-size:18px;
       padding:12px;
       border-radius:12px;
       border:1px solid #ccc;
-      resize:vertical;
       box-sizing:border-box;
       background:#fff;
+      overflow:auto;
+      white-space:pre-wrap;
+      -webkit-user-select:text;
+      user-select:text;
     }
+    .out:empty:before{
+      content: attr(data-placeholder);
+      color:#777;
+    }
+
     .wide{ flex:1; }
 
     /* 1–7：三行顯示（上點/數字/下點） */
@@ -63,11 +73,49 @@
       font-weight:900;
     }
 
+    /* 手打模式開關外觀（按鈕式） */
+    .toggle{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-left:auto;
+      font-size:14px;
+      user-select:none;
+    }
+    .switch{
+      width:46px;
+      height:28px;
+      border-radius:999px;
+      border:1px solid #bbb;
+      background:#fff;
+      position:relative;
+      cursor:pointer;
+      flex:0 0 auto;
+    }
+    .knob{
+      width:22px;
+      height:22px;
+      border-radius:50%;
+      background:#ddd;
+      position:absolute;
+      top:2px;
+      left:2px;
+      transition: all .15s ease;
+    }
+    .switch.on{
+      background:#111;
+      border-color:#111;
+    }
+    .switch.on .knob{
+      left:22px;
+      background:#fff;
+    }
+
     /* 小螢幕：按鈕更好按 */
     @media (max-width: 420px){
       button{ font-size:18px; padding:12px 12px; }
       .numBtn{ min-width:52px; }
-      textarea{ height:55vh; }
+      .out{ height:55vh; }
     }
   </style>
 </head>
@@ -75,7 +123,7 @@
 
 <h1>扒譜助手</h1>
 
-  <div style="margin-bottom:10px; font-size:14px;">
+<div style="margin-bottom:10px; font-size:14px;">
   扒譜詳細文檔：
   <a
     href="https://ai.feishu.cn/docx/GslydCNRyobywhxpEQ5cyE9tnDd?from=from_copylink"
@@ -85,13 +133,23 @@
     點此開啟
   </a>
 </div>
-  
-<!-- 輸出區 -->
-<textarea id="out" placeholder="輸出區（可直接輸入 / 編輯 / 複製 / 貼上）"></textarea>
-  
+
+<!-- 輸出區（輸入區在上） -->
+<div id="out" class="out" contenteditable="true" inputmode="none" spellcheck="false"
+     data-placeholder="輸出區（可直接輸入 / 編輯 / 複製 / 貼上）"></div>
+
 <div class="row">
   <div class="mode">鍵盤模式：<span id="modeName">中音</span></div>
-  <button id="toggleBtn" style="margin-left:auto;">切換（Tab）</button>
+
+  <!-- ✍️ 手打模式 -->
+  <div class="toggle" title="開啟後會彈出手機鍵盤，可直接手打；關閉則以按鈕輸入為主，避免鍵盤一直彈出">
+    <span>✍️ 手打模式</span>
+    <div id="typeSwitch" class="switch" role="switch" aria-checked="false" tabindex="0">
+      <div class="knob"></div>
+    </div>
+  </div>
+
+  <button id="toggleBtn">切換（Tab）</button>
 </div>
 
 <!-- 符號列 -->
@@ -99,7 +157,6 @@
 
 <!-- 1–7 -->
 <div class="row" id="numRow"></div>
-
 
 <!-- 功能 -->
 <div class="row">
@@ -123,15 +180,82 @@
 
   const out = document.getElementById("out");
   const modeName = document.getElementById("modeName");
+  const typeSwitch = document.getElementById("typeSwitch");
+
+  // ✍️ 手打模式狀態
+  let typingMode = false;
+
+  function setTypingMode(on){
+    typingMode = !!on;
+    typeSwitch.classList.toggle("on", typingMode);
+    typeSwitch.setAttribute("aria-checked", String(typingMode));
+
+    // 手打模式：允許鍵盤彈出（移除 inputmode 限制其實不一定生效）
+    // 關閉：盡量避免鍵盤彈出，並立即 blur
+    if (!typingMode) out.blur();
+  }
+
+  function toggleTypingMode(){
+    setTypingMode(!typingMode);
+  }
+
+  // Switch 支援點擊與鍵盤 Enter/Space
+  typeSwitch.addEventListener("click", toggleTypingMode);
+  typeSwitch.addEventListener("keydown", (e)=>{
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggleTypingMode();
+    }
+  });
+
+  // 若沒開手打模式，點到輸出區就立刻失焦（避免手機鍵盤彈出）
+  out.addEventListener("focus", ()=>{
+    if (!typingMode) setTimeout(()=> out.blur(), 0);
+  });
+
+  function ensureCaretInOut(){
+    const sel = window.getSelection();
+    if (!sel) return;
+
+    if (sel.rangeCount === 0) {
+      const r = document.createRange();
+      r.selectNodeContents(out);
+      r.collapse(false);
+      sel.addRange(r);
+      return;
+    }
+
+    const r = sel.getRangeAt(0);
+    if (!out.contains(r.startContainer)) {
+      const r2 = document.createRange();
+      r2.selectNodeContents(out);
+      r2.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(r2);
+    }
+  }
 
   function insertText(t){
-    const start = out.selectionStart;
-    const end   = out.selectionEnd;
-    const v = out.value;
-    out.value = v.slice(0, start) + t + v.slice(end);
-    const pos = start + t.length;
-    out.setSelectionRange(pos, pos);
-    out.focus();
+    // 插入時需要短暫 focus 才能定位游標
+    out.focus({ preventScroll: true });
+    ensureCaretInOut();
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      out.textContent += t;
+      if (!typingMode) out.blur();
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(document.createTextNode(t));
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    // 關鍵：沒開手打模式就立刻 blur，避免手機鍵盤一直彈出
+    if (!typingMode) out.blur();
   }
 
   function toggleLayer(){
@@ -161,7 +285,6 @@
       const b = document.createElement("button");
       b.className = "numBtn";
 
-      // 你要的：點在數字「上」或「下」
       const top = document.createElement("div");
       top.className = "dot";
       top.textContent = (dot === "above") ? "•" : "";
@@ -189,7 +312,6 @@
      - Tab  -> 切換模式
      ============================= */
   document.addEventListener("keydown", (e)=>{
-    // 不要在輸入中文選字的時候干擾（可避免部分手機鍵盤問題）
     if (e.isComposing) return;
 
     if(e.key >= "1" && e.key <= "7"){
@@ -205,12 +327,12 @@
   document.getElementById("toggleBtn").onclick = toggleLayer;
 
   document.getElementById("copyBtn").onclick = async ()=>{
-    await navigator.clipboard.writeText(out.value);
+    await navigator.clipboard.writeText(out.textContent);
     alert("已複製");
   };
 
   document.getElementById("downloadBtn").onclick = ()=>{
-    const blob = new Blob([out.value], {type:"text/plain;charset=utf-8"});
+    const blob = new Blob([out.textContent], {type:"text/plain;charset=utf-8"});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = `output_${new Date().toISOString().replace(/[:.]/g,"-")}.txt`;
@@ -219,11 +341,10 @@
   };
 
   // init
+  setTypingMode(false);     // 預設關閉：避免手機鍵盤一直彈
   renderSymbolRow();
   renderNumRow();
 </script>
 
 </body>
 </html>
-
-

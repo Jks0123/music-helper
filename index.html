@@ -12,11 +12,7 @@
       background:#fafafa;
       color:#111;
     }
-
-    h1{
-      font-size:20px;
-      margin:0 0 10px;
-    }
+    h1{ font-size:20px; margin:0 0 10px; }
 
     .row{
       display:flex;
@@ -38,8 +34,9 @@
     button:active{ background:#eee; }
 
     .mode{ font-weight:800; font-size:16px; }
+    .wide{ flex:1; }
 
-    /* ===== 輸入 / 輸出區（高度已調整） ===== */
+    /* ===== 輸入 / 輸出區 ===== */
     .out{
       width:100%;
       height:18vh;
@@ -59,8 +56,6 @@
       content: attr(data-placeholder);
       color:#777;
     }
-
-    .wide{ flex:1; }
 
     /* ===== 1–7 三行顯示（上點 / 數字 / 下點） ===== */
     .numBtn{
@@ -120,7 +115,7 @@
       background:#fff;
     }
 
-    /* ===== 手機專用（高度再降） ===== */
+    /* ===== 手機專用 ===== */
     @media (max-width:420px){
       button{ font-size:18px; padding:12px; }
       .numBtn{ min-width:52px; }
@@ -162,6 +157,7 @@
 </div>
 
 <script>
+  // 音域（順序：中音 -> 低音 -> 高音）
   const layers = [
     { name:"中音", map:[..."asdfghj"], dot:"none"  },
     { name:"低音", map:[..."zxcvbnm"], dot:"below" },
@@ -169,6 +165,7 @@
   ];
   let layerIdx = 0;
 
+  // 固定符號列：-.~*,;<>|
   const symbols = ["-",".","~","*",",",";","<",">","|"];
 
   const out = document.getElementById("out");
@@ -183,7 +180,7 @@
     if(!typingMode) out.blur();
   }
 
-  // ✅ 修正用：把游標固定到輸出區最後（防止點空白後跳到開頭）
+  // ✅ 把游標固定到輸出區最後
   function placeCaretAtEnd(el){
     el.focus({ preventScroll: true });
     const range = document.createRange();
@@ -194,7 +191,7 @@
     sel.addRange(range);
   }
 
-  // switch（點擊 & 鍵盤）
+  // switch：點擊 & 鍵盤 Enter/Space
   typeSwitch.addEventListener("click", ()=> setTypingMode(!typingMode));
   typeSwitch.addEventListener("keydown", (e)=>{
     if(e.key === "Enter" || e.key === " "){
@@ -203,37 +200,39 @@
     }
   });
 
-  // focus 行為：關閉手打就 blur；開啟手打就把 caret 放到末尾
+  // focus 行為：非手打也先把 caret 放末尾再 blur（防止之後跳到第一個字）
   out.addEventListener("focus", ()=>{
     if(!typingMode){
+      placeCaretAtEnd(out);
       setTimeout(()=>out.blur(), 0);
     }else{
       placeCaretAtEnd(out);
     }
   });
 
-  // ✅ 防止「點到外面後，selection 丟失」：若手打模式開啟，點任何空白處就把游標拉回末尾
-  // 這樣使用者點到頁面其他地方再回來打，也不會跳到第一個字。
+  // 點到輸出區外：手打模式開啟就把 caret 拉回末尾（避免 selection 丟失後跳開頭）
   document.addEventListener("pointerdown", (e)=>{
     if(!typingMode) return;
-    // 點到輸出區內，就交給瀏覽器正常處理（可手動插入中間）
     if(out.contains(e.target)) return;
-    // 點到輸出區外：下一次輸入前先把 caret 放到末尾
     setTimeout(()=>placeCaretAtEnd(out), 0);
   });
 
   function insertText(t){
-    // 插入時短暫 focus，確保 selection 存在
     out.focus({preventScroll:true});
 
-    // 若 selection 不在 out 裡（常見於點空白），先拉回末尾
-    const sel = window.getSelection();
-    if(!sel || sel.rangeCount === 0){
+    // ✅ 非手打模式：永遠追加在最後（最穩，不依賴 selection）
+    if(!typingMode){
       placeCaretAtEnd(out);
     }else{
-      const r = sel.getRangeAt(0);
-      if(!out.contains(r.startContainer)){
+      // 手打模式：selection 不在 out 裡才拉回末尾
+      const sel = window.getSelection();
+      if(!sel || sel.rangeCount === 0){
         placeCaretAtEnd(out);
+      }else{
+        const r = sel.getRangeAt(0);
+        if(!out.contains(r.startContainer)){
+          placeCaretAtEnd(out);
+        }
       }
     }
 
@@ -253,46 +252,60 @@
   }
 
   function toggleLayer(){
-    layerIdx = (layerIdx+1)%layers.length;
+    layerIdx = (layerIdx+1) % layers.length;
     modeName.textContent = layers[layerIdx].name;
     renderNumRow();
   }
 
   function renderSymbolRow(){
     const row = document.getElementById("symbolRow");
-    row.innerHTML="";
+    row.innerHTML = "";
     symbols.forEach(s=>{
-      const b=document.createElement("button");
-      b.textContent=s;
-      b.onclick=()=>insertText(s);
+      const b = document.createElement("button");
+      b.textContent = s;
+      b.onclick = ()=> insertText(s);
       row.appendChild(b);
     });
   }
 
   function renderNumRow(){
     const row = document.getElementById("numRow");
-    row.innerHTML="";
-    const {map,dot}=layers[layerIdx];
+    row.innerHTML = "";
+    const { map, dot } = layers[layerIdx];
+
     for(let i=1;i<=7;i++){
-      const b=document.createElement("button");
-      b.className="numBtn";
-      b.innerHTML=`
-        <div class="dot">${dot==="above"?"•":""}</div>
-        <div class="digit">${i}</div>
-        <div class="dot">${dot==="below"?"•":""}</div>`;
-      b.onclick=()=>insertText(map[i-1]);
+      const b = document.createElement("button");
+      b.className = "numBtn";
+
+      const top = document.createElement("div");
+      top.className = "dot";
+      top.textContent = (dot === "above") ? "•" : "";
+
+      const mid = document.createElement("div");
+      mid.className = "digit";
+      mid.textContent = String(i);
+
+      const bottom = document.createElement("div");
+      bottom.className = "dot";
+      bottom.textContent = (dot === "below") ? "•" : "";
+
+      b.appendChild(top);
+      b.appendChild(mid);
+      b.appendChild(bottom);
+
+      b.onclick = ()=> insertText(map[i-1]);
       row.appendChild(b);
     }
   }
 
   // 鍵盤事件：1..7 -> 輸入對應字母；Tab -> 切換模式
-  document.addEventListener("keydown",(e)=>{
+  document.addEventListener("keydown", (e)=>{
     if(e.isComposing) return;
 
-    if(e.key>="1" && e.key<="7"){
+    if(e.key >= "1" && e.key <= "7"){
       e.preventDefault();
       insertText(layers[layerIdx].map[parseInt(e.key,10)-1]);
-    }else if(e.key==="Tab"){
+    }else if(e.key === "Tab"){
       e.preventDefault();
       toggleLayer();
     }
@@ -300,16 +313,16 @@
 
   document.getElementById("toggleBtn").onclick = toggleLayer;
 
-  document.getElementById("copyBtn").onclick = async()=>{
+  document.getElementById("copyBtn").onclick = async ()=>{
     await navigator.clipboard.writeText(out.textContent);
     alert("已複製");
   };
 
-  document.getElementById("downloadBtn").onclick=()=>{
-    const blob=new Blob([out.textContent],{type:"text/plain;charset=utf-8"});
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download=`output_${Date.now()}.txt`;
+  document.getElementById("downloadBtn").onclick = ()=>{
+    const blob = new Blob([out.textContent], {type:"text/plain;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `output_${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
   };

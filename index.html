@@ -2,9 +2,8 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>扒譜助手</title>
-
   <style>
     body{
       font-family: system-ui, -apple-system, "Segoe UI", Arial;
@@ -36,35 +35,27 @@
     .mode{ font-weight:800; font-size:16px; }
     .wide{ flex:1; }
 
-    /* ===== 輸入 / 輸出區 ===== */
-    .out{
+    /* 輸入區：用 textarea（電腦最穩） */
+    textarea{
       width:100%;
-      height:18vh;
-      height:18dvh;
+      height:25vh;      /* 你說要減少一半：可調 20~30vh */
       font-size:18px;
       padding:12px;
       border-radius:12px;
       border:1px solid #ccc;
       box-sizing:border-box;
       background:#fff;
-      overflow:auto;
-      white-space:pre-wrap;
-      -webkit-user-select:text;
-      user-select:text;
-    }
-    .out:empty:before{
-      content: attr(data-placeholder);
-      color:#777;
+      resize:vertical;  /* 電腦可自行拉高/拉低 */
     }
 
-    /* ===== 1–7 三行顯示（上點 / 數字 / 下點） ===== */
+    /* 1–7：三行顯示（上點/數字/下點） */
     .numBtn{
       display:grid;
-      grid-template-rows:14px 24px 14px;
+      grid-template-rows: 14px 24px 14px;
       align-items:center;
       justify-items:center;
       min-width:56px;
-      padding:10px;
+      padding:10px 10px;
     }
     .dot{
       line-height:1;
@@ -76,73 +67,18 @@
       font-size:20px;
       font-weight:900;
     }
-
-    /* ===== 手打模式開關 ===== */
-    .toggle{
-      display:flex;
-      align-items:center;
-      gap:8px;
-      margin-left:auto;
-      font-size:14px;
-      user-select:none;
-    }
-    .switch{
-      width:46px;
-      height:28px;
-      border-radius:999px;
-      border:1px solid #bbb;
-      background:#fff;
-      position:relative;
-      cursor:pointer;
-      flex:0 0 auto;
-    }
-    .knob{
-      width:22px;
-      height:22px;
-      border-radius:50%;
-      background:#ddd;
-      position:absolute;
-      top:2px;
-      left:2px;
-      transition:all .15s ease;
-    }
-    .switch.on{
-      background:#111;
-      border-color:#111;
-    }
-    .switch.on .knob{
-      left:22px;
-      background:#fff;
-    }
-
-    /* ===== 手機專用 ===== */
-    @media (max-width:420px){
-      button{ font-size:18px; padding:12px; }
-      .numBtn{ min-width:52px; }
-      .out{ height:16vh; height:16dvh; }
-    }
   </style>
 </head>
-
 <body>
 
 <h1>扒譜助手</h1>
 
-<!-- 輸入 / 輸出區（在最上面） -->
-<div id="out" class="out" contenteditable="true" inputmode="none" spellcheck="false"
-     data-placeholder="輸出區（可直接輸入 / 編輯 / 複製 / 貼上）"></div>
+<!-- 輸入區在上 -->
+<textarea id="out" placeholder="輸出區（可直接輸入 / 編輯 / 複製 / 貼上）"></textarea>
 
 <div class="row">
   <div class="mode">鍵盤模式：<span id="modeName">中音</span></div>
-
-  <div class="toggle">
-    <span>✍️ 手打模式</span>
-    <div id="typeSwitch" class="switch" tabindex="0" role="switch" aria-checked="false">
-      <div class="knob"></div>
-    </div>
-  </div>
-
-  <button id="toggleBtn">切換（Tab）</button>
+  <button id="toggleBtn" style="margin-left:auto;">切換（Tab）</button>
 </div>
 
 <!-- 符號列 -->
@@ -157,102 +93,37 @@
 </div>
 
 <script>
-  // 音域（順序：中音 -> 低音 -> 高音）
+  /* =============================
+     音域設定（順序：中音 -> 低音 -> 高音）
+     ============================= */
   const layers = [
-    { name:"中音", map:[..."asdfghj"], dot:"none"  },
-    { name:"低音", map:[..."zxcvbnm"], dot:"below" },
-    { name:"高音", map:[..."qwertyu"], dot:"above" },
+    { name: "中音", map: [..."asdfghj"], dot: "none"  },
+    { name: "低音", map: [..."zxcvbnm"], dot: "below" },
+    { name: "高音", map: [..."qwertyu"], dot: "above" },
   ];
   let layerIdx = 0;
 
-  // 固定符號列：-.~*,;<>|
-  const symbols = ["-",".","~","*",",",";","<",">","|"];
+  /* 固定符號列：-.~*,;<>| */
+  const symbols = ["-", ".", "~", "*", ",", ";", "<", ">", "|"];
 
   const out = document.getElementById("out");
   const modeName = document.getElementById("modeName");
-  const typeSwitch = document.getElementById("typeSwitch");
-  let typingMode = false;
-
-  function setTypingMode(on){
-    typingMode = !!on;
-    typeSwitch.classList.toggle("on", typingMode);
-    typeSwitch.setAttribute("aria-checked", String(typingMode));
-    if(!typingMode) out.blur();
-  }
-
-  // ✅ 把游標固定到輸出區最後
-  function placeCaretAtEnd(el){
-    el.focus({ preventScroll: true });
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    range.collapse(false);
-    const sel = window.getSelection();
-    sel.removeAllRanges();
-    sel.addRange(range);
-  }
-
-  // switch：點擊 & 鍵盤 Enter/Space
-  typeSwitch.addEventListener("click", ()=> setTypingMode(!typingMode));
-  typeSwitch.addEventListener("keydown", (e)=>{
-    if(e.key === "Enter" || e.key === " "){
-      e.preventDefault();
-      setTypingMode(!typingMode);
-    }
-  });
-
-  // focus 行為：非手打也先把 caret 放末尾再 blur（防止之後跳到第一個字）
-  out.addEventListener("focus", ()=>{
-    if(!typingMode){
-      placeCaretAtEnd(out);
-      setTimeout(()=>out.blur(), 0);
-    }else{
-      placeCaretAtEnd(out);
-    }
-  });
-
-  // 點到輸出區外：手打模式開啟就把 caret 拉回末尾（避免 selection 丟失後跳開頭）
-  document.addEventListener("pointerdown", (e)=>{
-    if(!typingMode) return;
-    if(out.contains(e.target)) return;
-    setTimeout(()=>placeCaretAtEnd(out), 0);
-  });
 
   function insertText(t){
-    out.focus({preventScroll:true});
+    // 在 textarea 的游標位置插入文字（支援選取取代）
+    const start = out.selectionStart ?? out.value.length;
+    const end = out.selectionEnd ?? out.value.length;
+    const v = out.value;
 
-    // ✅ 非手打模式：永遠追加在最後（最穩，不依賴 selection）
-    if(!typingMode){
-      placeCaretAtEnd(out);
-    }else{
-      // 手打模式：selection 不在 out 裡才拉回末尾
-      const sel = window.getSelection();
-      if(!sel || sel.rangeCount === 0){
-        placeCaretAtEnd(out);
-      }else{
-        const r = sel.getRangeAt(0);
-        if(!out.contains(r.startContainer)){
-          placeCaretAtEnd(out);
-        }
-      }
-    }
+    out.value = v.slice(0, start) + t + v.slice(end);
 
-    const sel2 = window.getSelection();
-    if(!sel2 || sel2.rangeCount === 0){
-      out.textContent += t;
-    }else{
-      const r2 = sel2.getRangeAt(0);
-      r2.deleteContents();
-      r2.insertNode(document.createTextNode(t));
-      r2.collapse(false);
-      sel2.removeAllRanges();
-      sel2.addRange(r2);
-    }
-
-    if(!typingMode) out.blur();
+    const newPos = start + t.length;
+    out.setSelectionRange(newPos, newPos);
+    out.focus();
   }
 
   function toggleLayer(){
-    layerIdx = (layerIdx+1) % layers.length;
+    layerIdx = (layerIdx + 1) % layers.length;
     modeName.textContent = layers[layerIdx].name;
     renderNumRow();
   }
@@ -298,37 +169,51 @@
     }
   }
 
-  // 鍵盤事件：1..7 -> 輸入對應字母；Tab -> 切換模式
+  /* =============================
+     鍵盤事件：
+     - 1..7 -> 輸入對應字母（不輸入數字）
+     - Tab  -> 切換模式（不跳焦點）
+     ============================= */
   document.addEventListener("keydown", (e)=>{
-    if(e.isComposing) return;
+    if (e.isComposing) return;
+
+    // 避免在其他輸入控件時誤攔截（這頁只有 textarea，但保險）
+    const active = document.activeElement;
+    const isTypingHere = (active === out);
 
     if(e.key >= "1" && e.key <= "7"){
+      // 只要在本頁，就攔截數字（避免插入數字）
       e.preventDefault();
-      insertText(layers[layerIdx].map[parseInt(e.key,10)-1]);
-    }else if(e.key === "Tab"){
+      const { map } = layers[layerIdx];
+      insertText(map[parseInt(e.key,10)-1]);
+      return;
+    }
+
+    if(e.key === "Tab"){
       e.preventDefault();
       toggleLayer();
+      return;
     }
   });
 
   document.getElementById("toggleBtn").onclick = toggleLayer;
 
   document.getElementById("copyBtn").onclick = async ()=>{
-    await navigator.clipboard.writeText(out.textContent);
+    await navigator.clipboard.writeText(out.value);
     alert("已複製");
   };
 
   document.getElementById("downloadBtn").onclick = ()=>{
-    const blob = new Blob([out.textContent], {type:"text/plain;charset=utf-8"});
+    const blob = new Blob([out.value], {type:"text/plain;charset=utf-8"});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `output_${Date.now()}.txt`;
+    a.download = `output_${new Date().toISOString().replace(/[:.]/g,"-")}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
 
   // init
-  setTypingMode(false);
+  out.focus();
   renderSymbolRow();
   renderNumRow();
 </script>

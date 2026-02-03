@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>扒譜助手</title>
+
   <style>
     body{
       font-family: system-ui, -apple-system, "Segoe UI", Arial;
@@ -11,7 +12,12 @@
       background:#fafafa;
       color:#111;
     }
-    h1{ font-size:20px; margin:0 0 10px; }
+    h1{ font-size:20px; margin:0 0 6px; }
+
+    .doclink{
+      font-size:14px;
+      margin-bottom:10px;
+    }
 
     .row{
       display:flex;
@@ -35,27 +41,27 @@
     .mode{ font-weight:800; font-size:16px; }
     .wide{ flex:1; }
 
-    /* 輸入區：用 textarea（電腦最穩） */
+    /* ===== 輸入區（電腦最穩） ===== */
     textarea{
       width:100%;
-      height:25vh;      /* 你說要減少一半：可調 20~30vh */
+      height:28vh;
       font-size:18px;
       padding:12px;
       border-radius:12px;
       border:1px solid #ccc;
       box-sizing:border-box;
       background:#fff;
-      resize:vertical;  /* 電腦可自行拉高/拉低 */
+      resize:vertical;
     }
 
-    /* 1–7：三行顯示（上點/數字/下點） */
+    /* ===== 1–7 三行顯示 ===== */
     .numBtn{
       display:grid;
-      grid-template-rows: 14px 24px 14px;
+      grid-template-rows:14px 24px 14px;
       align-items:center;
       justify-items:center;
       min-width:56px;
-      padding:10px 10px;
+      padding:10px;
     }
     .dot{
       line-height:1;
@@ -69,11 +75,21 @@
     }
   </style>
 </head>
+
 <body>
 
 <h1>扒譜助手</h1>
 
-<!-- 輸入區在上 -->
+<div class="doclink">
+  扒譜詳細文檔：
+  <a
+    href="https://ai.feishu.cn/docx/GslydCNRyobywhxpEQ5cyE9tnDd?from=from_copylink"
+    target="_blank"
+    rel="noopener noreferrer"
+  >點此開啟</a>
+</div>
+
+<!-- 輸入區 -->
 <textarea id="out" placeholder="輸出區（可直接輸入 / 編輯 / 複製 / 貼上）"></textarea>
 
 <div class="row">
@@ -93,32 +109,28 @@
 </div>
 
 <script>
-  /* =============================
-     音域設定（順序：中音 -> 低音 -> 高音）
-     ============================= */
+  /* ===== 音域設定（中 → 低 → 高） ===== */
   const layers = [
-    { name: "中音", map: [..."asdfghj"], dot: "none"  },
-    { name: "低音", map: [..."zxcvbnm"], dot: "below" },
-    { name: "高音", map: [..."qwertyu"], dot: "above" },
+    { name:"中音", map:[..."asdfghj"], dot:"none"  },
+    { name:"低音", map:[..."zxcvbnm"], dot:"below" },
+    { name:"高音", map:[..."qwertyu"], dot:"above" },
   ];
   let layerIdx = 0;
 
-  /* 固定符號列：-.~*,;<>| */
-  const symbols = ["-", ".", "~", "*", ",", ";", "<", ">", "|"];
+  /* 固定符號列 */
+  const symbols = ["-",".","~","*",",",";","<",">","|"];
 
   const out = document.getElementById("out");
   const modeName = document.getElementById("modeName");
 
   function insertText(t){
-    // 在 textarea 的游標位置插入文字（支援選取取代）
     const start = out.selectionStart ?? out.value.length;
     const end = out.selectionEnd ?? out.value.length;
     const v = out.value;
 
-    out.value = v.slice(0, start) + t + v.slice(end);
-
-    const newPos = start + t.length;
-    out.setSelectionRange(newPos, newPos);
+    out.value = v.slice(0,start) + t + v.slice(end);
+    const p = start + t.length;
+    out.setSelectionRange(p, p);
     out.focus();
   }
 
@@ -148,51 +160,26 @@
       const b = document.createElement("button");
       b.className = "numBtn";
 
-      const top = document.createElement("div");
-      top.className = "dot";
-      top.textContent = (dot === "above") ? "•" : "";
-
-      const mid = document.createElement("div");
-      mid.className = "digit";
-      mid.textContent = String(i);
-
-      const bottom = document.createElement("div");
-      bottom.className = "dot";
-      bottom.textContent = (dot === "below") ? "•" : "";
-
-      b.appendChild(top);
-      b.appendChild(mid);
-      b.appendChild(bottom);
-
+      b.innerHTML = `
+        <div class="dot">${dot==="above"?"•":""}</div>
+        <div class="digit">${i}</div>
+        <div class="dot">${dot==="below"?"•":""}</div>
+      `;
       b.onclick = ()=> insertText(map[i-1]);
       row.appendChild(b);
     }
   }
 
-  /* =============================
-     鍵盤事件：
-     - 1..7 -> 輸入對應字母（不輸入數字）
-     - Tab  -> 切換模式（不跳焦點）
-     ============================= */
-  document.addEventListener("keydown", (e)=>{
-    if (e.isComposing) return;
+  /* ===== 鍵盤 ===== */
+  document.addEventListener("keydown",(e)=>{
+    if(e.isComposing) return;
 
-    // 避免在其他輸入控件時誤攔截（這頁只有 textarea，但保險）
-    const active = document.activeElement;
-    const isTypingHere = (active === out);
-
-    if(e.key >= "1" && e.key <= "7"){
-      // 只要在本頁，就攔截數字（避免插入數字）
+    if(e.key>="1" && e.key<="7"){
       e.preventDefault();
-      const { map } = layers[layerIdx];
-      insertText(map[parseInt(e.key,10)-1]);
-      return;
-    }
-
-    if(e.key === "Tab"){
+      insertText(layers[layerIdx].map[parseInt(e.key,10)-1]);
+    }else if(e.key==="Tab"){
       e.preventDefault();
       toggleLayer();
-      return;
     }
   });
 
@@ -207,12 +194,12 @@
     const blob = new Blob([out.value], {type:"text/plain;charset=utf-8"});
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `output_${new Date().toISOString().replace(/[:.]/g,"-")}.txt`;
+    a.download = `output_${Date.now()}.txt`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
 
-  // init
+  /* init */
   out.focus();
   renderSymbolRow();
   renderNumRow();
